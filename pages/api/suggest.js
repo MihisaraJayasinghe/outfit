@@ -1,57 +1,65 @@
+// pages/api/suggest.js
 import { Configuration, OpenAIApi } from 'openai'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' })
-    return
+    return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { mood } = req.body
+  const { mood, tags = [], colors = [] } = req.body
   const apiKey = process.env.OPENAI_API_KEY
-
   if (!apiKey) {
-    res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
-    return
+    return res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
   }
-
   if (!mood) {
-    res.status(400).json({ error: 'Mood is required' })
-    return
+    return res.status(400).json({ error: 'Mood is required' })
   }
 
-  const configuration = new Configuration({ apiKey })
-  const openai = new OpenAIApi(configuration)
+  // model specs as requested
+  const modelDesc = `5'6" height,black hair,pale skin, medium body build with fair skin , long wavy hair`
+
+  const openai = new OpenAIApi(new Configuration({ apiKey }))
+  let outfitInfo = { text: '', keywords: '' }
 
   try {
-    const chatCompletion = await openai.createChatCompletion({
+    const chat = await openai.createChatCompletion({
       model: 'gpt-3.5-turbo',
       messages: [
         { role: 'system', content: "You're a stylish personal shopper." },
-        { role: 'user', content: `Suggest an outfit for: "${mood}". Please respond in JSON { "text": "...", "keywords": "..." }` }
-      ]
+        {
+          role: 'user',
+          content:
+            `Suggest an outfit for mood: "${mood}". ` +
+            `Incorporate tags: [${tags.join(', ')}], colors: [${colors.join(', ')}], ` +
+            `for a model who is ${modelDesc}. ` +
+            `Respond ONLY in valid JSON: { "text": "...", "keywords": "..." }`
+        }
+      ],
+      temperature: 0.8
     })
 
-    const message = chatCompletion.data.choices[0].message?.content || '{}'
-    let outfitInfo
     try {
-      outfitInfo = JSON.parse(message)
-    } catch (e) {
-      outfitInfo = { text: message, keywords: '' }
+      outfitInfo = JSON.parse(chat.data.choices[0].message.content)
+    } catch {
+      outfitInfo.text = chat.data.choices[0].message.content.trim()
     }
-
-    const dallePrompt = `A clean, high-fashion editorial illustration of a woman wearing: ${outfitInfo.text}. Avoid: blurry, watermark, low resolution, deformed, cartoonish.`
-
-    const imageResponse = await openai.createImage({
-      prompt: dallePrompt,
-      n: 1,
-      size: '512x512'
-    })
-
-    const imageUrl = imageResponse.data.data[0].url
-
-    res.status(200).json({ outfit: { text: outfitInfo.text, imageUrl } })
-  } catch (error) {
-    console.error(error.response?.data || error.message)
-    res.status(500).json({ error: 'Failed to generate outfit' })
+  } catch (err) {
+    console.error('ChatGPT error:', err)
+    return res.status(500).json({ error: 'Failed to generate outfit text' })
   }
+
+  // build the Pollinations prompt
+  let prompt = `high-fashion editorial photo, ${outfitInfo.text}, worn by a model who is ${modelDesc}`
+  if (tags.length)   prompt += `, featuring ${tags.join(', ')}`
+  if (colors.length) prompt += `, color theme ${colors.join(', ')}`
+  prompt += `, pastel colours, cinematic lighting --ar 1:1`
+
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
+
+  return res.status(200).json({
+    outfit: {
+      text: outfitInfo.text,
+      imageUrl
+    }
+  })
 }
