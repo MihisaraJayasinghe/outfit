@@ -8,6 +8,7 @@ export default function Home() {
   const [outfit, setOutfit] = useState(null)
   const [loading, setLoading] = useState(false)
   const [imageLoading, setImageLoading] = useState(false)
+  const [revealingLevel, setRevealingLevel] = useState(50) // Default 50%
 
   const outfitTags = [
     'Crop tops', 'Dresses', 'Shirts', 'T‑shirts', 'Pants',
@@ -66,7 +67,13 @@ export default function Home() {
       const r = await fetch('/api/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mood, tags: selectedTags, colors: selectedColors, customInstructions })
+        body: JSON.stringify({
+          mood,
+          tags: selectedTags,
+          colors: selectedColors,
+          customInstructions,
+          revealingLevel
+        })
       })
       const { outfit } = await r.json()
       setOutfit(outfit)
@@ -164,6 +171,26 @@ export default function Home() {
               placeholder="Optional: specify any clothing details to refine the outfit..."
               className="w-full h-24 px-4 py-2 rounded-xl border border-gray-300 bg-white/70 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 backdrop-blur-sm transition transform hover:scale-105"
             />
+          </section>
+
+          {/* revealing slider */}
+          <section>
+            <h2 className="text-lg mb-3">Revealing Level</h2>
+            <div className="space-y-2">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={revealingLevel}
+                onChange={(e) => setRevealingLevel(Number(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+              <div className="flex justify-between text-sm text-gray-500">
+                <span>Conservative</span>
+                <span>{revealingLevel}%</span>
+                <span>Revealing</span>
+              </div>
+            </div>
           </section>
 
           {/* mood + submit */}
